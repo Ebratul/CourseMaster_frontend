@@ -1,40 +1,27 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import { getToken, clearToken } from "../../utils/auth";
-import { getMe } from "../../services/auth.api";
 
 export default function Navbar() {
     const navigate = useNavigate();
     const token = getToken();
-    const [me, setMe] = useState(null);
+    // The signed-in user is loaded once by MainLayout and shared through Redux
+    const me = useSelector((state) => state.auth.user);
 
-    const navLinkClass = ({ isActive, to }) =>
-        (isActive || window.location.pathname.startsWith("/"))
+    const navLinkClass = ({ isActive }) =>
+        isActive
             ? "text-primary font-semibold"
             : "text-base-content/80 hover:text-primary";
 
     const handleLogout = () => {
         clearToken();
-        setMe(null);
+        localStorage.removeItem("user_token");
+        localStorage.removeItem("dev_bypass");
         navigate("/");
         window.location.reload();
     };
-
-    useEffect(() => {
-        const loadMe = async () => {
-            if (!token) return setMe(null);
-            try {
-                const res = await getMe();
-                setMe(res.data);
-            } catch {
-                clearToken();
-                setMe(null);
-            }
-        };
-        loadMe();
-    }, [token]);
 
     const initials = me?.name
         ? me.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
@@ -55,8 +42,8 @@ export default function Navbar() {
                         <li><NavLink className={navLinkClass} to="/">Home</NavLink></li>
                         <li><NavLink className={navLinkClass} to="/courses">Courses</NavLink></li>
 
-                        {/* ✅ Dashboard when logged in OR when dev_bypass is active */}
-                        {(token && me) ? (
+                        {/* ✅ Dashboard only when logged in */}
+                        {token && me && (
                             <li>
                                 <NavLink
                                     className={navLinkClass}
@@ -65,12 +52,7 @@ export default function Navbar() {
                                     Dashboard
                                 </NavLink>
                             </li>
-                        ) : (localStorage.getItem("dev_bypass") === "true") ? (
-                            <>
-                                <li><NavLink className={navLinkClass} to="/student">Student Portal</NavLink></li>
-                                <li><NavLink className={navLinkClass} to="/admin">Admin Portal</NavLink></li>
-                            </>
-                        ) : null}
+                        )}
                     </ul>
                 </div>
 
@@ -114,7 +96,6 @@ export default function Navbar() {
                                         Dashboard
                                     </Link>
                                 </li>
-                                <li><Link to="/profile">Profile</Link></li>
                                 <li>
                                     <button onClick={handleLogout} className="text-red-500">
                                         Logout
@@ -139,7 +120,7 @@ export default function Navbar() {
                             className="
                 menu menu-sm dropdown-content mt-3 p-3 shadow
                 bg-base-100 rounded-box w-56 border border-base-300
-                items-center text-center max-h-32 overflow-hidden
+                items-center text-center
               "
                         >
                             <li><NavLink className={navLinkClass} to="/">Home</NavLink></li>
@@ -187,7 +168,6 @@ export default function Navbar() {
                                         </Link>
                                     </li>
 
-                                    <li className="w-full"><Link to="/profile">Profile</Link></li>
                                     <li className="w-full">
                                         <button onClick={handleLogout} className="btn btn-ghost btn-sm w-full text-red-500">
                                             Logout

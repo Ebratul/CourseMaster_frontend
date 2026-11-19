@@ -10,7 +10,7 @@ api.interceptors.request.use(
   (config) => {
     const token = getToken();
     if (token) {
-      config.headers.Authorization = token;
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -21,8 +21,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
+    const status = error.response?.status;
+    const hadToken = !!error.config?.headers?.Authorization;
+    // Token expired/invalid -> sign out and go to login.
+    // Skip when already on /login to avoid a reload loop.
+    if (hadToken && status === 401 && window.location.pathname !== "/login") {
       clearToken();
       window.location.href = "/login";
     }

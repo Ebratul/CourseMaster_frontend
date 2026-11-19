@@ -16,57 +16,74 @@ export default function CoursesSection() {
     // query states
     const [page, setPage] = useState(1);
     const [limit] = useState(8);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(""); // text in the search box
+    const [appliedSearch, setAppliedSearch] = useState(""); // search actually sent to the API
     const [sort, setSort] = useState("");
     const [category, setCategory] = useState("");
     const [tags, setTags] = useState("");
+    const [debouncedCategory, setDebouncedCategory] = useState("");
+    const [debouncedTags, setDebouncedTags] = useState("");
 
-    const fetchCourses = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const params = {
-                page,
-                limit,
-                search: search || undefined,
-                sort: sort || undefined,
-                category: category || undefined,
-                tags: tags || undefined,
-            };
-
-            const res = await getCourses(params);
-            setCourses(res.data.courses || []);
-            setTotalPages(res.data.totalPages || 1);
-        } catch (err) {
-            setError("Failed to load courses");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // Debounce free-text filters so we don't send a request on every keystroke
     useEffect(() => {
+        const t = setTimeout(() => {
+            setDebouncedCategory(category.trim());
+            setDebouncedTags(tags.trim());
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [category, tags]);
+
+    // Single source of truth for fetching. Responses from outdated requests are ignored.
+    useEffect(() => {
+        let ignore = false;
+        const fetchCourses = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                const params = {
+                    page,
+                    limit,
+                    search: appliedSearch || undefined,
+                    sort: sort || undefined,
+                    category: debouncedCategory || undefined,
+                    tags: debouncedTags || undefined,
+                };
+
+                const res = await getCourses(params);
+                if (ignore) return;
+                setCourses(res.data.courses || []);
+                setTotalPages(res.data.totalPages || 1);
+            } catch (err) {
+                if (!ignore) setError(err.response?.data?.message || "Failed to load courses");
+            } finally {
+                if (!ignore) setLoading(false);
+            }
+        };
         fetchCourses();
-        // eslint-disable-next-line
-    }, [page, sort, category, tags]);
+        return () => {
+            ignore = true;
+        };
+    }, [page, limit, appliedSearch, sort, debouncedCategory, debouncedTags]);
 
     const onSearchSubmit = (e) => {
         e.preventDefault();
         setPage(1);
-        fetchCourses();
+        setAppliedSearch(search.trim());
     };
 
-    // reset page when filters change
-    useEffect(() => {
+    const handleSortChange = (value) => {
+        setSort(value);
         setPage(1);
-    }, [sort, category, tags]);
+    };
 
     return (
         <div className="space-y-6">
 
             <CoursesFilters
                 search={search} setSearch={setSearch}
-                sort={sort} setSort={setSort}
+                sort={sort} setSort={handleSortChange}
                 category={category} setCategory={setCategory}
                 tags={tags} setTags={setTags}
                 onSearchSubmit={onSearchSubmit}

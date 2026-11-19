@@ -23,13 +23,6 @@ export default function CourseDetails() {
         return () => dispatch(clearCurrentCourse());
     }, [id, dispatch]);
 
-    // Load user if token exists but user is not loaded
-    useEffect(() => {
-        if (token && !user) {
-            dispatch(getMeAsync());
-        }
-    }, [token, user, dispatch]);
-
     const isCreator = user && currentCourse && user._id === currentCourse.instructorId;
     const isAdmin = user && user.role === "admin";
     const cannotEnroll = isAdmin || isCreator;
@@ -53,9 +46,7 @@ export default function CourseDetails() {
 
         if (cannotEnroll) return;
 
-        // Note: Since batches don't have _id in the model, we pass null
-        // The backend can be updated later to handle batch references properly
-        dispatch(enrollCourseAsync({ courseId: id, batchId: selectedBatchId !== null ? selectedBatchId.toString() : null }));
+        dispatch(enrollCourseAsync({ courseId: id, batchId: selectedBatchId }));
     };
 
     useEffect(() => {
@@ -113,7 +104,7 @@ export default function CourseDetails() {
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent',
                             backgroundClip: 'text'
-                        }}>৳ {course.price * 100}</p>
+                        }}>৳ {course.price?.toLocaleString()}</p>
 
                         <div>
                             {isAdmin ? (
@@ -256,8 +247,8 @@ export default function CourseDetails() {
                         <h2 className="page-heading-h2 mb-4">Available Batches</h2>
                         <div className="space-y-2">
                             {course.batches.map((batch, idx) => {
-                                // Use index as batch identifier since batches don't have _id
-                                const batchIndex = idx;
+                                // Mongoose gives every batch sub-document its own _id
+                                const batchIndex = batch._id;
                                 const isSelected = selectedBatchId === batchIndex;
                                 return (
                                     <div
@@ -285,7 +276,7 @@ export default function CourseDetails() {
                                 );
                             })}
                         </div>
-                        {selectedBatchId && (
+                        {selectedBatchId !== null && (
                             <div className="mt-3 text-sm text-primary">
                                 ✓ Batch selected for enrollment
                             </div>

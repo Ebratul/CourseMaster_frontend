@@ -31,7 +31,7 @@ export default function Register() {
 
             await registerUser(payload);
 
-            navigate("/login");
+            navigate("/login", { state: { registered: true } });
         } catch (err) {
             setError(err.response?.data?.message || "Register failed");
         } finally {
@@ -67,6 +67,7 @@ export default function Register() {
                                 onChange={handleChange}
                                 placeholder="Enter your full name"
                                 className="input input-bordered w-full focus:input-primary"
+                                minLength={2}
                                 required
                             />
                         </div>
@@ -93,8 +94,9 @@ export default function Register() {
                                 type="password"
                                 value={form.password}
                                 onChange={handleChange}
-                                placeholder="Create a password"
+                                placeholder="Create a password (min. 6 characters)"
                                 className="input input-bordered w-full focus:input-primary"
+                                minLength={6}
                                 required
                             />
                         </div>

@@ -135,3 +135,11 @@ For complete API documentation with request/response formats, see [courseMaster_
 The frontend can be deployed to:
 - **Netlify**
 
+
+## Bug bash: fixes and report
+
+37 bugs found during bug bashing are fixed in this repository and the backend
+(https://github.com/Ebratul/CourseMaster_backend). The full report, with steps to reproduce and
+before/after screenshots, is in [docs/bug-report/BUG_REPORT.md](docs/bug-report/BUG_REPORT.md).
+
+Local setup: copy `.env.example` to `.env` (points to `http://localhost:5000/api`), run `npm install`, then `npm run dev`.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCourseById } from "../../store/slices/coursesSlice";
 import { completeLessonAsync, fetchMyEnrollments } from "../../store/slices/enrollmentSlice";
@@ -48,6 +48,7 @@ export default function CoursePlayer() {
     const { id } = useParams();
     const dispatch = useDispatch();
     const [enrollment, setEnrollment] = useState(null);
+    const [enrollmentChecked, setEnrollmentChecked] = useState(false);
     const [selectedModule, setSelectedModule] = useState(0);
     const [selectedLesson, setSelectedLesson] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -61,9 +62,11 @@ export default function CoursePlayer() {
             try {
                 const res = await getMyEnrollments();
                 const userEnroll = res.data.find((e) => e.course?._id === id);
-                setEnrollment(userEnroll);
+                setEnrollment(userEnroll || null);
             } catch (err) {
                 console.error("Failed to load enrollment:", err);
+            } finally {
+                setEnrollmentChecked(true);
             }
         };
         fetchEnrollment();
@@ -99,7 +102,7 @@ export default function CoursePlayer() {
         }
     };
 
-    if (loading) {
+    if (loading || !enrollmentChecked) {
         return (
             <div className="flex justify-center items-center min-h-screen">
                 <span className="loading loading-spinner loading-lg"></span>
@@ -109,6 +112,20 @@ export default function CoursePlayer() {
 
     if (!currentCourse) {
         return <div className="alert alert-error">Course not found</div>;
+    }
+
+    // Only enrolled students may open the player
+    if (!enrollment) {
+        return (
+            <div className="max-w-xl mx-auto py-10">
+                <div className="alert alert-warning flex flex-col sm:flex-row gap-3">
+                    <span>You are not enrolled in this course. Enroll first to access the lessons.</span>
+                    <Link to={`/courses/${id}`} className="btn btn-sm btn-primary">
+                        View Course
+                    </Link>
+                </div>
+            </div>
+        );
     }
 
     const module = currentCourse.syllabus?.[selectedModule];
@@ -139,9 +156,9 @@ export default function CoursePlayer() {
                         <div className="card bg-base-100 shadow">
                             <div className="card-body p-3 sm:p-6">
                                 <h3 className="card-title text-base sm:text-lg md:text-xl break-words">{lesson.title}</h3>
-                                <div className="bg-base-300 rounded overflow-hidden mt-2 sm:mt-4">
+                                <div className="aspect-video bg-base-300 rounded overflow-hidden mt-2 sm:mt-4">
                                     <iframe
-                                        style={{ height: '700px', width: '300px' }}
+                                        className="w-full h-full"
                                         src={convertToEmbedUrl(lesson.videoUrl)}
                                         title={lesson.title}
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -152,10 +169,10 @@ export default function CoursePlayer() {
 
                                 <button
                                     onClick={handleMarkComplete}
-                                    disabled={!!enrollment?.progress?.completedLessons?.includes(lesson)}
-                                    className={`btn btn-sm sm:btn-md ${enrollment?.progress?.completedLessons?.includes(lesson) ? "btn-disabled" : "btn-success"} mt-3 sm:mt-4 w-full sm:w-auto`}
+                                    disabled={!!enrollment?.progress?.completedLessons?.includes(lesson?._id)}
+                                    className={`btn btn-sm sm:btn-md ${enrollment?.progress?.completedLessons?.includes(lesson?._id) ? "btn-disabled" : "btn-success"} mt-3 sm:mt-4 w-full sm:w-auto`}
                                 >
-                                    {enrollment?.progress?.completedLessons?.includes(lesson) ? "Completed ✓" : "✓ Mark as Complete"}
+                                    {enrollment?.progress?.completedLessons?.includes(lesson?._id) ? "Completed ✓" : "✓ Mark as Complete"}
                                 </button>
                             </div>
                         </div>
@@ -189,6 +206,7 @@ export default function CoursePlayer() {
 
                     {lesson?.assignmentPrompt && (
                         <AssignmentSubmission
+                            key={`assignment-${lesson._id}`}
                             courseId={id}
                             lessonId={lesson._id}
                             prompt={lesson.assignmentPrompt}
@@ -199,6 +217,7 @@ export default function CoursePlayer() {
 
                     {lesson?.quiz && lesson.quiz.length > 0 && (
                         <QuizInterface
+                            key={`quiz-${lesson._id}`}
                             quiz={lesson.quiz}
                             courseId={id}
                             lessonId={lesson._id}
@@ -512,6 +531,8 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
     const [error, setError] = useState(null);
     const [previousSubmission, setPreviousSubmission] = useState(null);
     const [loadingPrevious, setLoadingPrevious] = useState(true);
+    // Correct answers are only sent by the API with the student's own submission
+    const correctAnswers = previousSubmission?.correctAnswers || [];
 
     // Check for previous submission on mount
     useEffect(() => {
@@ -612,6 +633,7 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                 percent: result.percent,
                 lessonId: lessonId,
                 answers: answersArray,
+                correctAnswers: result.correctAnswers || [],
                 createdAt: new Date(),
             };
             setPreviousSubmission(submissionResult);
@@ -703,7 +725,7 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                 <div className="space-y-4 sm:space-y-6 mt-3 sm:mt-4">
                     {quiz.map((question, qIdx) => {
                         const userAnswer = answers[qIdx];
-                        const isCorrect = userAnswer === question.correctIndex;
+                        const isCorrect = userAnswer === correctAnswers[qIdx];
                         const showResults = submitted && previousSubmission;
                         const showReview = previousSubmission && !submitted;
 
@@ -743,7 +765,7 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                                                     Your answer: <span className="text-error">{question.options[userAnswer]}</span>
                                                 </p>
                                                 <p className="text-xs text-base-content/70">
-                                                    Correct answer: <span className="text-success font-semibold">{question.options[question.correctIndex]}</span>
+                                                    Correct answer: <span className="text-success font-semibold">{question.options[correctAnswers[qIdx]]}</span>
                                                 </p>
                                             </div>
                                         )}
@@ -752,23 +774,23 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
 
                                 {showReview && !loading && (
                                     <p className="text-xs mb-2 text-base-content/70">
-                                        💡 Correct answer: <span className="font-semibold">{question.options[question.correctIndex]}</span>
+                                        💡 Correct answer: <span className="font-semibold">{question.options[correctAnswers[qIdx]]}</span>
                                     </p>
                                 )}
                                 <div className="space-y-2">
                                     {question.options?.map((option, oIdx) => (
                                         <label
                                             key={oIdx}
-                                            className={`cursor-pointer flex gap-2 sm:gap-3 p-2 rounded transition ${showResults && oIdx === question.correctIndex ? 'bg-success/20' :
+                                            className={`cursor-pointer flex gap-2 sm:gap-3 p-2 rounded transition ${showResults && oIdx === correctAnswers[qIdx] ? 'bg-success/20' :
                                                 showResults && oIdx === userAnswer && !isCorrect ? 'bg-error/20' :
-                                                    showReview && oIdx === question.correctIndex ? 'bg-success/20' :
+                                                    showReview && oIdx === correctAnswers[qIdx] ? 'bg-success/20' :
                                                         showReview && oIdx === userAnswer && !isCorrect ? 'bg-error/20' :
                                                             'hover:bg-base-200'
                                                 }`}
                                         >
                                             <input
                                                 type="radio"
-                                                name="quiz-option"
+                                                name={`question-${lessonId}-${qIdx}`}
                                                 checked={answers[qIdx] === oIdx}
                                                 onChange={() => {
                                                     if (!loading) {
@@ -779,13 +801,13 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                                                 className="radio radio-sm flex-shrink-0"
                                             />
                                             <span className="text-xs sm:text-sm flex-1">{option}</span>
-                                            {showResults && oIdx === question.correctIndex && (
+                                            {showResults && oIdx === correctAnswers[qIdx] && (
                                                 <span className="text-success font-semibold">✓ Correct Answer</span>
                                             )}
                                             {showResults && oIdx === userAnswer && !isCorrect && (
                                                 <span className="text-error font-semibold">✗ Your Answer</span>
                                             )}
-                                            {showReview && !loading && oIdx === question.correctIndex && (
+                                            {showReview && !loading && oIdx === correctAnswers[qIdx] && (
                                                 <span className="text-success">✓ Correct</span>
                                             )}
                                             {showReview && !loading && oIdx === userAnswer && !isCorrect && (
@@ -863,7 +885,7 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                                 <div className="space-y-2">
                                     {quiz.map((question, qIdx) => {
                                         const userAnswer = answers[qIdx];
-                                        const isCorrect = userAnswer === question.correctIndex;
+                                        const isCorrect = userAnswer === correctAnswers[qIdx];
                                         return (
                                             <div
                                                 key={qIdx}
@@ -884,7 +906,7 @@ function QuizInterface({ quiz, courseId, lessonId, enrollment, onComplete }) {
                                                         </p>
                                                         {!isCorrect && (
                                                             <p className="text-xs mt-1 text-success">
-                                                                Correct answer: <span className="font-semibold">{question.options[question.correctIndex]}</span>
+                                                                Correct answer: <span className="font-semibold">{question.options[correctAnswers[qIdx]]}</span>
                                                             </p>
                                                         )}
                                                     </div>
